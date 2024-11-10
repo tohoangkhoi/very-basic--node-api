@@ -5,13 +5,13 @@ on:
     branches:
       - master # Replace with the branch you want to trigger the deployment
 
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
-    # concurrency:
-    #   group: ${{ github.ref }}
-    #   cancel-in-progress: true
 
     strategy:
       matrix:
