@@ -20,7 +20,7 @@ jobs:
     steps:
       #test
       - name: Print current matrix
-        run: echo {{ matrix.envs }}
+        run: echo ${{ matrix.envs }}
       # Checkout the code
       - name: Checkout code
         uses: actions/checkout@v3
@@ -60,12 +60,12 @@ jobs:
           WAIT_INTERVAL=60  # Interval between checks in seconds
           ELAPSED=0  # Initialize elapsed time counter
 
-          ENV_STATUS=$(aws elasticbeanstalk describe-environments --environment-names {{ matrix.envs }} --query "Environments[0].Status" --output text)
+          ENV_STATUS=$(aws elasticbeanstalk describe-environments --environment-names ${{ matrix.envs }} --query "Environments[0].Status" --output text)
           while [[ "$ENV_STATUS" != "Ready" && "$ELAPSED" -lt "$MAX_WAIT" ]]; do
             echo "Environment not ready (current status: $ENV_STATUS). Waiting $WAIT_INTERVAL seconds..."
             sleep $WAIT_INTERVAL
             ELAPSED=$((ELAPSED + WAIT_INTERVAL))
-            ENV_STATUS=$(aws elasticbeanstalk describe-environments --environment-names {{ matrix.envs }} --query "Environments[0].Status" --output text)
+            ENV_STATUS=$(aws elasticbeanstalk describe-environments --environment-names ${{ matrix.envs }} --query "Environments[0].Status" --output text)
           done
 
           if [[ "$ENV_STATUS" != "Ready" ]]; then
@@ -90,4 +90,4 @@ jobs:
           fi
 
       - name: Deploy new ElasticBeanstalk Application Version
-        run: aws elasticbeanstalk update-environment --environment-name {{ matrix.envs }} --version-label "app-version-${{steps.version.outputs.prop}}_${{ github.sha }}"
+        run: aws elasticbeanstalk update-environment --environment-name ${{ matrix.envs }} --version-label "app-version-${{steps.version.outputs.prop}}_${{ github.sha }}"
