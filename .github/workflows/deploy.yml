@@ -18,6 +18,9 @@ jobs:
         envs: ["Test1-env", "Test2-env-1"]
 
     steps:
+      #test
+      - name: Print current matrix
+        run: echo {{ matrix.envs }}
       # Checkout the code
       - name: Checkout code
         uses: actions/checkout@v3
