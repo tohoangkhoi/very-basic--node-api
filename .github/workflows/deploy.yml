@@ -70,15 +70,15 @@ jobs:
 
       - name: Create new ElasticBeanstalk Application Version
         run: |
-          if aws elasticbeanstalk describe-application-versions --application-name av-api \
+          if aws elasticbeanstalk describe-application-versions --application-name test1 \
             --query "ApplicationVersions[].VersionLabel" --output text | grep -q "app-version-${{steps.version.outputs.prop}}_${{ github.sha }}"; then
             echo "Application version already exists."
           else
             aws elasticbeanstalk create-application-version \
-              --application-name av-api \
+              --application-name test1 \
               --version-label "app-version-${{steps.version.outputs.prop}}_${{ github.sha }}" \
               --description "app image deployment: commit-sha-${{ github.sha }}" \
-              --source-bundle S3Bucket="av-api",S3Key="app-deploy_package_${{steps.version.outputs.prop}}_${{ github.sha }}.zip"
+              --source-bundle S3Bucket="elasticbeanstalk-ap-southeast-2-203918882105",S3Key="app-deploy_package_${{steps.version.outputs.prop}}_${{ github.sha }}.zip"
               echo "Application version: app-version-${{steps.version.outputs.prop}}_${{ github.sha }} created successfully."
           fi
 
