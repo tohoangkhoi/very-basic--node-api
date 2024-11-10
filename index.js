@@ -22,6 +22,10 @@ app.get("/users", async (req, res) => {
   });
 });
 
+app.get("/", async (req, res) => {
+  res.send({ status: 200, message: "League of Legends is bad." });
+});
+
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`);
 });

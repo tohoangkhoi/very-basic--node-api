@@ -1,18 +1,86 @@
-name: GitHub Actions Demo
-run-name: ${{ github.actor }} is testing out GitHub Actions 🚀
-on: [push]
+name: Deploy Strapi app to AWS Elastic Beanstalk environment (Test1-env)
+
+on:
+  push:
+    branches:
+      - master # Replace with the branch you want to trigger the deployment
+
 jobs:
-  Explore-GitHub-Actions:
+  deploy:
     runs-on: ubuntu-latest
+
+    concurrency:
+      group: ${{ github.ref }}
+      cancel-in-progress: true
+
     steps:
-      - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
-      - run: echo "🐧 This job is now running on a ${{ runner.os }} server hosted by GitHub!"
-      - run: echo "🔎 The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
-      - name: Check out repository code
-        uses: actions/checkout@v4
-      - run: echo "💡 The ${{ github.repository }} repository has been cloned to the runner."
-      - run: echo "🖥️ The workflow is now ready to test your code on the runner."
-      - name: List files in the repository
+      # Checkout the code
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Get Package JSON version
+        id: version
+        uses: notiz-dev/github-action-json-property@v0.2.0
+        with:
+          path: "package.json"
+          prop_path: "version"
+
+      # Set up AWS CLI and ECR authentication
+      - name: Set up AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-southeast-2
+
+      - name: Install AWS CLI
         run: |
-          ls ${{ github.workspace }}
-      - run: echo "🍏 This job's status is ${{ job.status }}."
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip -q awscliv2.zip
+          sudo ./aws/install --update
+          echo "export PATH=\$PATH:/usr/local/bin/aws" >> $GITHUB_ENV
+
+      - name: Create ZIP deployment package
+        run: zip -r app-deploy_package_${{steps.version.outputs.prop}}_${{ github.sha }}.zip ./
+
+      - name: Upload package to S3 bucket
+        run: aws s3 cp app-deploy_package_${{steps.version.outputs.prop}}_${{ github.sha }}.zip s3://elasticbeanstalk-ap-southeast-2-203918882105/
+
+      - name: Wait for Elastic Beanstalk environment to be ready
+        id: wait_for_ready
+        run: |
+          MAX_WAIT=300  # Maximum wait time in seconds (5 minutes)
+          WAIT_INTERVAL=60  # Interval between checks in seconds
+          ELAPSED=0  # Initialize elapsed time counter
+
+          ENV_STATUS=$(aws elasticbeanstalk describe-environments --environment-names Test1-env --query "Environments[0].Status" --output text)
+          while [[ "$ENV_STATUS" != "Ready" && "$ELAPSED" -lt "$MAX_WAIT" ]]; do
+            echo "Environment not ready (current status: $ENV_STATUS). Waiting $WAIT_INTERVAL seconds..."
+            sleep $WAIT_INTERVAL
+            ELAPSED=$((ELAPSED + WAIT_INTERVAL))
+            ENV_STATUS=$(aws elasticbeanstalk describe-environments --environment-names Test1-env --query "Environments[0].Status" --output text)
+          done
+
+          if [[ "$ENV_STATUS" != "Ready" ]]; then
+            echo "Error: Environment not ready after waiting for 5 minutes."
+            exit 1
+          fi
+
+          echo "Environment is ready for deployment."
+
+      - name: Create new ElasticBeanstalk Application Version
+        run: |
+          if aws elasticbeanstalk describe-application-versions --application-name av-api \
+            --query "ApplicationVersions[].VersionLabel" --output text | grep -q "app-version-${{steps.version.outputs.prop}}_${{ github.sha }}"; then
+            echo "Application version already exists."
+          else
+            aws elasticbeanstalk create-application-version \
+              --application-name av-api \
+              --version-label "app-version-${{steps.version.outputs.prop}}_${{ github.sha }}" \
+              --description "app image deployment: commit-sha-${{ github.sha }}" \
+              --source-bundle S3Bucket="av-api",S3Key="app-deploy_package_${{steps.version.outputs.prop}}_${{ github.sha }}.zip"
+              echo "Application version: app-version-${{steps.version.outputs.prop}}_${{ github.sha }} created successfully."
+          fi
+
+      - name: Deploy new ElasticBeanstalk Application Version
+        run: aws elasticbeanstalk update-environment --environment-name Test1-env --version-label "app-version-${{steps.version.outputs.prop}}_${{ github.sha }}"
